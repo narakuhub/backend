@@ -1,37 +1,34 @@
 const axios = require('axios');
 
 module.exports = async (req, res) => {
-    // 1. Pastikan method POST
+    // 1. Hanya izinkan method POST
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // 2. Pastikan body di-parse sebagai JSON
-    let body = req.body;
-    if (typeof body === 'string') {
-        try {
-            body = JSON.parse(body);
-        } catch (e) {
-            return res.status(400).json({ error: 'Invalid JSON body' });
-        }
-    }
-
+    // 2. Parse body (handle string atau object)
+    let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const { query } = body;
 
-    // 3. Cek apakah API Key ada
+    // 3. Validasi API Key
     if (!process.env.ROBLOX_API_KEY) {
-        console.error("DEBUG: ROBLOX_API_KEY is missing in Vercel settings!");
         return res.status(500).json({ error: 'Server configuration error' });
     }
 
     try {
+        // 4. Request ke Roblox dengan categoryPath yang wajib ada
         const response = await axios({
             method: 'post',
             url: 'https://apis.roblox.com/toolbox-service/v2/assets:search',
             data: {
-                query: query || "car", // default ke "car" jika query kosong
+                query: query || "car",
                 assetTypes: ["Model"],
-                limit: 10
+                limit: 10,
+                // Parameter ini yang sering bikin error 400 kalau kosong
+                category: {
+                    categoryPath: "Models",
+                    searchCategoryType: "Featured"
+                }
             },
             headers: {
                 'x-api-key': process.env.ROBLOX_API_KEY,
@@ -41,11 +38,11 @@ module.exports = async (req, res) => {
 
         return res.status(200).json(response.data);
     } catch (error) {
-        // 4. Debugging error yang lebih detail ke Logs Vercel
+        // 5. Log detail error ke Vercel untuk debugging
         const status = error.response ? error.response.status : 500;
-        const data = error.response ? error.response.data : error.message;
+        const errorData = error.response ? error.response.data : error.message;
         
-        console.error("ROBLOX API ERROR:", JSON.stringify(data));
-        return res.status(status).json({ error: 'Roblox API failed', details: data });
+        console.error("ROBLOX API ERROR:", JSON.stringify(errorData));
+        return res.status(status).json({ error: 'Roblox API failed', details: errorData });
     }
 };
